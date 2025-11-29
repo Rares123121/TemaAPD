@@ -10,19 +10,19 @@ public class Data {
     */
 
 
-    public static ConcurrentHashMap<String, Article> idMap = new ConcurrentHashMap<>();
-    public static ConcurrentHashMap<String, Article> titleMap = new ConcurrentHashMap<>();
+    //public static ConcurrentHashMap<String, Article> idMap = new ConcurrentHashMap<>();
+    //public static ConcurrentHashMap<String, Article> titleMap = new ConcurrentHashMap<>();
     public static List<Article> uniqueArticles = Collections.synchronizedList(new ArrayList<>());
     public static List<Article> all = Collections.synchronizedList(new ArrayList<>());
     // pt a nu mai baga elemente duplicate chiar daca nu mai exista in 
-    public static Set<String> removedUUIDs = ConcurrentHashMap.newKeySet();
-    public static Set<String> removedTitles = ConcurrentHashMap.newKeySet();
+    //public static Set<String> removedUUIDs = ConcurrentHashMap.newKeySet();
+    //public static Set<String> removedTitles = ConcurrentHashMap.newKeySet();
 
         /*
     imi mai trebuie hashmap pt cuvinte, pt limbi, pt articole pe limbi, pt articole pe categorii
     pt cel mai recent articol, pt cel mai bun scriitor, pt top category
     */
-    public static ConcurrentHashMap<String, String> Publicate = new ConcurrentHashMap<>();  
+    //public static ConcurrentHashMap<String, String> Publicate = new ConcurrentHashMap<>();  
     public static ConcurrentHashMap<String, List<String>> FilePeLimbi = new ConcurrentHashMap<>();    
     public static ConcurrentHashMap<String, List<String>> FilePeCategorii = new ConcurrentHashMap<>();
     public static ConcurrentHashMap<String, AtomicInteger> KeywordsCount = new ConcurrentHashMap<>();
@@ -33,112 +33,79 @@ public class Data {
         Mai am nevoie de functii care sa caute cel mai bun autor, categorie, limba si sa faca si articolele in functie de data
     */
 
-    public static synchronized boolean addRawArticle(Article a) {
+    public static void sequentialDedup() {
 
-    // 1. Dacă articolul a fost deja marcat ca „eliminat definitiv”
-        if (removedUUIDs.contains(a.uuid) || removedTitles.contains(a.title)) {
-            return false;
+        Map<String, Integer> uuidCount = new HashMap<>();
+        Map<String, Integer> titleCount = new HashMap<>();
+
+        for (Article a : all) {
+            uuidCount.put(a.uuid, uuidCount.getOrDefault(a.uuid, 0) + 1);
+            titleCount.put(a.title, titleCount.getOrDefault(a.title, 0) + 1);
         }
 
-        // 2. Verificăm dacă există alt articol cu același uuid sau title
-        Article oldUUID = idMap.get(a.uuid);
-        Article oldTitle = titleMap.get(a.title);
+        uniqueArticles.clear();
+        List<Article> duplicates = new ArrayList<>();
 
-        boolean hasDupUUID = oldUUID != null;
-        boolean hasDupTitle = oldTitle != null;
-
-        // 3. Caz fără duplicate => adăugare temporară
-        if (!hasDupUUID && !hasDupTitle) {
-            idMap.put(a.uuid, a);
-            titleMap.put(a.title, a);
-            uniqueArticles.add(a);
-            return true;
+        for (Article a : all) {
+            if (uuidCount.get(a.uuid) > 1 || titleCount.get(a.title) > 1) {
+                duplicates.add(a);
+            } else {
+                uniqueArticles.add(a);
+            }
         }
 
-        // 4. Există două articole cu același title/uuid => eliminăm TOT
-        removedUUIDs.add(a.uuid);
-        removedTitles.add(a.title);
-
-        // 4.a Elimină articolul vechi din structuri
-        if (oldUUID != null) {
-            uniqueArticles.remove(oldUUID);
-            removeArticleFromStructures(oldUUID);
-            idMap.remove(oldUUID.uuid);
-            titleMap.remove(oldUUID.title);
-        }
-
-        if (oldTitle != null && oldTitle != oldUUID) { 
-            uniqueArticles.remove(oldTitle);
-            removeArticleFromStructures(oldTitle);
-            idMap.remove(oldTitle.uuid);
-            titleMap.remove(oldTitle.title);
-        }
-
-        // 4.b Nu inserăm articolul nou
-        return false;
+        cleanupDataStructures(duplicates);
     }
 
-    // public static synchronized boolean addRawArticle(Article a) {
-    //     if (removedUUIDs.contains(a.uuid) || removedTitles.contains(a.title)) {
-    //         return false;
-    //     }
 
-    //     Article oldUUID = idMap.putIfAbsent(a.uuid, a);
-    //     Article oldTitle = titleMap.putIfAbsent(a.title, a);
+    public static void cleanupDataStructures(List<Article> duplicates) {
 
-    //     if (oldUUID == null && oldTitle == null) {
-    //         uniqueArticles.add(a);
-    //         return true;
-    //     }
-    //     removedUUIDs.add(a.uuid);
-    //     removedTitles.add(a.title);
+    // Scoatem uuid-urile din structurile auxiliare
+        for (Article a : duplicates) {
 
-    //     if (oldUUID != null) {
-    //         uniqueArticles.remove(oldUUID);
-    //         removeArticleFromStructures(oldUUID);
-    //     }
-    //     if (oldTitle != null && oldTitle != oldUUID) {
-    //         uniqueArticles.remove(oldTitle);
-    //         removeArticleFromStructures(oldTitle);
-    //     }
+            // limbi
+            List<String> langList = FilePeLimbi.get(a.language);
+            if (langList != null) {
+                langList.remove(a.uuid);
+            }
 
-    //     idMap.remove(a.uuid);
-    //     titleMap.remove(a.title);
+            // categorii
+            for (String c : a.categories) {
+                List<String> catList = FilePeCategorii.get(c);
+                if (catList != null) {
+                    catList.remove(a.uuid);
+                }
+            }
 
-    //     return false;
-    // }
-
-
-    public static void removeArticleFromStructures(Article a) {
-        for (String c : a.categories) {
-            List<String> list = FilePeCategorii.get(c);
-            if (list != null) 
-                list.remove(a.uuid);
+            // autori
+            List<String> autList = Autori.get(a.author);
+            if (autList != null) {
+                autList.remove(a.uuid);
+            }
         }
 
-        List<String> langs = FilePeLimbi.get(a.language);
-        if (langs != null) 
-            langs.remove(a.uuid);
+        // Scadem keywords doar pentru articolele duplicate
+        for (Article a : duplicates) {
+            if (a.language.equals("english")) {
 
-        List<String> autList = Autori.get(a.author);
-        if (autList != null)
-            autList.remove(a.uuid);
+                Set<String> words = tokenize(a.text);  // set = cuvinte unice din articol
 
-        if(a.language.equals("english")){
-            Set<String> words = tokenize(a.text);
-            for (String w : words) {
-                AtomicInteger cnt = KeywordsCount.get(w);
-                if (cnt != null) {
-                    cnt.decrementAndGet();
-                    if (cnt.get() <= 0) 
-                        KeywordsCount.remove(w);
+                for (String w : words) {
+                    KeywordsCount.computeIfPresent(w, (key, val) -> {
+                        int newVal = val.decrementAndGet();
+                        return newVal <= 0 ? null : val;
+                    });
                 }
             }
         }
+        // Scoatem articolele din idMap și titleMap
+        // for (Article a : duplicates) {
+        //     idMap.remove(a.uuid);
+        //     titleMap.remove(a.title);
+        // }
     }
 
-
-    public static synchronized Set<String> tokenize(String text) {
+    public static Set<String> tokenize(String text) {
         text = text.toLowerCase();
         String[] tokens = text.split("\\s+");
 

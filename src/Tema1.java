@@ -108,7 +108,8 @@ public class Tema1 {
         // System.out.println(Data.Autori);
         // System.out.println(Data.getSortedKeywords());
 
-        System.out.println(nrThreads);
+        //System.out.println(nrThreads);
+        Data.sequentialDedup();
         Statistici.ComputeStats();
         // System.out.println(Statistici.unice + " " + Statistici.duplicate);
         // System.out.println(Statistici.NumeAutor + " " + Statistici.articoleScrise);

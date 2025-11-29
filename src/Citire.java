@@ -35,27 +35,28 @@ public class Citire implements Runnable {
 
                 for (Article a : articles) {
                     Data.all.add(a);
-                    boolean keep = Data.addRawArticle(a);
-                    if (keep) {
-                        for (String c : a.categories) {
-                            Data.FilePeCategorii.computeIfAbsent(c, k -> Collections.synchronizedList(new ArrayList<>())).add(a.uuid);
-                        }
+                    //Data.idMap.put(a.uuid, a);
+                    // boolean keep = Data.addRawArticle(a);
+                    // if (keep) {
+                    for (String c : a.categories) {
+                        Data.FilePeCategorii.computeIfAbsent(c, k -> Collections.synchronizedList(new ArrayList<>())).add(a.uuid);
+                    }
                         
-                        Data.Autori.computeIfAbsent(a.author, k -> Collections.synchronizedList(new ArrayList<>())).add(a.uuid);
+                    Data.Autori.computeIfAbsent(a.author, k -> Collections.synchronizedList(new ArrayList<>())).add(a.uuid);
 
                         // pun limba doar daca exista in lista de limbi
-                        if(date.languages.contains(a.language))
-                            Data.FilePeLimbi.computeIfAbsent(a.language, k -> Collections.synchronizedList(new ArrayList<>())).add(a.uuid);
+                    if(date.languages.contains(a.language))
+                        Data.FilePeLimbi.computeIfAbsent(a.language, k -> Collections.synchronizedList(new ArrayList<>())).add(a.uuid);
                         
-                        if(a.language.equals("english")) {
-                            Set<String> words = Data.tokenize(a.text);
-                            for (String w : words) {
-                                if (!date.linkingWords.contains(w)) {
-                                    Data.KeywordsCount.computeIfAbsent(w, k -> new AtomicInteger(0)).incrementAndGet();
-                                }
+                    if(a.language.equals("english")) {
+                        Set<String> words = Data.tokenize(a.text);
+                        for (String w : words) {
+                            if (!date.linkingWords.contains(w)) {
+                                Data.KeywordsCount.computeIfAbsent(w, k -> new AtomicInteger(0)).incrementAndGet();
                             }
                         }
                     }
+                    //}
                 }
             } catch(Exception e){
                 System.out.println(e);
